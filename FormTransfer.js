@@ -1,100 +1,115 @@
 // Helper function to get a unique, deterministic identifier for a field instance
 // Accepts the specific form and the field element.
 function getFieldInstanceIdentifier(formElement, fieldElement) {
-    if (!formElement || !fieldElement) return null;
+    if (!formElement || !fieldElement) {
+        console.error("getFieldInstanceIdentifier: Missing form or field element.");
+        return null;
+    }
 
-    const originalName = fieldElement.name || fieldElement.id;
-    if (!originalName) return null; // Skip fields without name/id
+    const fieldName = fieldElement.name || fieldElement.id;
+    if (!fieldName) {
+        // Skip fields without a name or ID, as they cannot be reliably identified.
+        return null;
+    }
 
-    // 1. Get all relevant fields within the specific form
+    // 1. Get all potentially relevant fields within the specific form.
     const allFieldsInForm = Array.from(formElement.querySelectorAll('input, select, textarea'));
 
-    // 2. Filter this list manually to find elements with the exact same original name or ID
-    // This avoids issues with special characters in CSS selectors.
-    const relevantFields = allFieldsInForm.filter(f => {
-        // Ignore buttons and fields without name/id during counting
-        if ((f.type === 'submit' || f.type === 'button' || f.type === 'reset') || (!f.name && !f.id)) {
-             return false;
+    // 2. Filter to find fields with the *exact* same name or ID.
+    //    Manual filtering avoids potential issues with complex CSS selectors.
+    const fieldsWithSameName = allFieldsInForm.filter(field => {
+        // Ignore buttons and fields without a name/id during the counting process.
+        const isButton = ['submit', 'button', 'reset'].includes(field.type);
+        const lacksNameOrId = !field.name && !field.id;
+        if (isButton || lacksNameOrId) {
+            return false;
         }
-        return (f.name === originalName || f.id === originalName);
+        // Check if the current field in the loop matches the target field's name/id.
+        return (field.name === fieldName || field.id === fieldName);
     });
 
-    // 3. Find the index of the current element within this filtered list
-    const index = relevantFields.indexOf(fieldElement);
+    // 3. Find the index of the *current* fieldElement within this filtered list.
+    const index = fieldsWithSameName.indexOf(fieldElement);
 
-    // 4. Return the identifier (e.g., "fieldName_0", "fieldName_1")
-    // If index is -1 (shouldn't happen if fieldElement is in the list), handle gracefully
-    return index !== -1 ? `${originalName}_${index}` : `${originalName}_error`; // Or null?
+    // 4. Construct the identifier (e.g., "fieldName_0", "fieldName_1").
+    //    If the index is -1 (which implies fieldElement wasn't found in its own group,
+    //    shouldn't happen if the logic is correct), return null.
+    return index !== -1 ? `${fieldName}_${index}` : null;
 }
 
 
 // Função para extrair dados de um formulário específico
+// Function to extract data from a specific form element.
 function extractFormData(formElement) {
     if (!formElement) {
-        alert("Elemento de formulário não fornecido para extração!");
-        return;
+        console.error("extractFormData: Form element not provided.");
+        return null; // Return null instead of undefined implicitly
     }
 
     const formData = {};
+    const formInputs = formElement.querySelectorAll('input, select, textarea');
 
-    // Coleta todos os elementos de entrada do formulário específico
-    const inputs = formElement.querySelectorAll('input, select, textarea');
-
-    inputs.forEach(input => {
-        // Ignora botões
-        if (input.type === 'submit' || input.type === 'button' || input.type === 'reset') {
+    formInputs.forEach(inputElement => {
+        // Ignore buttons
+        if (['submit', 'button', 'reset'].includes(inputElement.type)) {
             return;
         }
 
         // Pass the formElement to the identifier function
-        const identifier = getFieldInstanceIdentifier(formElement, input);
+        const identifier = getFieldInstanceIdentifier(formElement, inputElement);
         if (!identifier) return; // Skip if identifier couldn't be generated or field is irrelevant
 
-        // Trata diferentes tipos de input
-        if (input.type === 'checkbox') {
+        // Handle different input types
+        const inputType = inputElement.type;
+        const baseName = inputElement.name || inputElement.id; // Used for grouping radios/checkboxes
+
+        if (inputType === 'checkbox') {
              // For checkboxes, store an array if multiple have the same identifier base
              // This handles checkbox groups correctly even with unique identifiers
-             const baseName = input.name || input.id;
              if (!formData[baseName]) {
                  formData[baseName] = [];
              }
-             if (input.checked) {
-                 formData[baseName].push(input.value || 'on'); // Store value if checked
+             if (inputElement.checked) {
+                 formData[baseName].push(inputElement.value || 'on'); // Store value if checked
              }
              // Note: The unique identifier helps distinguish *which* checkbox group instance,
              // but standard handling often relies on the shared name. We store under base name.
              // If distinguishing individual checkboxes within a group instance is critical,
              // the identifier could be used directly: formData[identifier] = input.checked;
-        } else if (input.type === 'radio') {
+        } else if (inputType === 'radio') {
             // For radio buttons, only store the value of the selected one per group name
-            const baseName = input.name || input.id;
-            if (input.checked) {
-                formData[baseName] = input.value;
+           if (inputElement.checked) {
+                formData[baseName] = inputElement.value;
             } else if (formData[baseName] === undefined) {
                 // Ensure the key exists even if none are checked initially
                 formData[baseName] = null;
             }
              // Similar to checkboxes, standard handling uses the shared name.
              // If distinguishing radio groups instances is needed:
-             // if (input.checked) { formData[identifier] = input.value; }
-        } else if (input.type === 'file') {
-            // Arquivos não podem ser facilmente serializados
+             // if (inputElement.checked) { formData[identifier] = inputElement.value; }
+        } else if (inputType === 'file') {
+            // Files cannot be easily serialized to JSON, store null or placeholder.
             formData[identifier] = null;
-        } else if (input.multiple && input.tagName === 'SELECT') {
+        } else if (inputElement.multiple && inputElement.tagName === 'SELECT') {
             // Handle multi-select
-            formData[identifier] = Array.from(input.selectedOptions).map(option => option.value);
+            formData[identifier] = Array.from(inputElement.selectedOptions).map(option => option.value);
         }
          else {
-            formData[identifier] = input.value;
+             // Default case for text, password, hidden, select-one, textarea, etc.
+            formData[identifier] = inputElement.value;
         }
     });
 
     return formData;
 }
 
-// Função para salvar os dados como um arquivo JSON
+// Function to save data as a JSON file
 function saveAsJson(data) {
-    const jsonString = JSON.stringify(data, null, 2);
+    if (!data) {
+        console.error("saveAsJson: No data provided to save.");
+        return;
+    }
+    const jsonString = JSON.stringify(data, null, 2); // Pretty print JSON
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     
@@ -102,21 +117,23 @@ function saveAsJson(data) {
     downloadLink.href = url;
     downloadLink.download = 'form_data.json';
     
-    // Adiciona o link ao documento e clica automaticamente
+    // Add the link to the document and click it automatically
     document.body.appendChild(downloadLink);
     downloadLink.click();
     
-    // Limpa
+    // Clean up
     document.body.removeChild(downloadLink);
     URL.revokeObjectURL(url);
     
-    alert("Dados do formulário salvos com sucesso! Para preencher outro formulário, vá até a página desejada e clique no botão 'Carregar e Preencher Formulário'.");
+    // Consider a less intrusive notification method if alerts are disruptive
+    console.log("Form data saved successfully as form_data.json.");
+    alert("Form data saved successfully! To fill another form, navigate to the desired page and click 'Load and Fill Form'.");
 }
 
-// Função para carregar um arquivo JSON
+// Function to load data from a JSON file via a user prompt
 function loadJsonFile() {
     return new Promise((resolve, reject) => {
-        // Cria uma div modal para o input file
+        // Create a modal div for the file input
         const modal = document.createElement('div');
         modal.style.position = 'fixed';
         modal.style.top = '0';
@@ -129,7 +146,7 @@ function loadJsonFile() {
         modal.style.alignItems = 'center';
         modal.style.zIndex = '10000';
         
-        // Cria o painel de upload
+        // Create the upload panel within the modal
         const panel = document.createElement('div');
         panel.style.backgroundColor = '#fff';
         panel.style.padding = '20px';
@@ -139,7 +156,7 @@ function loadJsonFile() {
         panel.style.width = '80%';
         
         const title = document.createElement('h3');
-        title.textContent = 'Selecione o arquivo JSON com os dados do formulário';
+        title.textContent = 'Select the JSON file with the form data';
         title.style.marginTop = '0';
         
         const fileInput = document.createElement('input');
@@ -154,7 +171,7 @@ function loadJsonFile() {
         buttonContainer.style.justifyContent = 'flex-end';
         
         const cancelButton = document.createElement('button');
-        cancelButton.textContent = 'Cancelar';
+        cancelButton.textContent = 'Cancel';
         cancelButton.style.marginRight = '10px';
         cancelButton.style.padding = '8px 16px';
         cancelButton.style.backgroundColor = '#f44336';
@@ -164,7 +181,7 @@ function loadJsonFile() {
         cancelButton.style.cursor = 'pointer';
         
         const loadButton = document.createElement('button');
-        loadButton.textContent = 'Carregar';
+        loadButton.textContent = 'Load';
         loadButton.style.padding = '8px 16px';
         loadButton.style.backgroundColor = '#4CAF50';
         loadButton.style.color = 'white';
@@ -173,14 +190,15 @@ function loadJsonFile() {
         loadButton.style.cursor = 'pointer';
         loadButton.disabled = true;
         
-        // Habilita o botão de carregar apenas quando um arquivo for selecionado
+        // Enable the load button only when a file is selected
         fileInput.addEventListener('change', () => {
             loadButton.disabled = !fileInput.files.length;
         });
         
         cancelButton.onclick = () => {
             document.body.removeChild(modal);
-            reject("Operação cancelada pelo usuário");
+            console.log("File load operation cancelled by user.");
+            reject("User cancelled the operation"); // Reject promise on cancel
         };
         
         loadButton.onclick = () => {
@@ -229,51 +247,52 @@ function loadJsonFile() {
     });
 }
 
-// Função para preencher um formulário específico com dados JSON
+// Function to fill a specific form element with data from a JSON object
 function fillFormWithJson(formElement, data) { // Added formElement parameter
     if (!formElement) { // Check formElement
-        alert("Elemento de formulário não fornecido para preenchimento!");
+        console.error("fillFormWithJson: Form element not provided.");
         return;
     }
     if (!data) { // Check data
-         alert("Dados para preenchimento não fornecidos!");
+         console.error("fillFormWithJson: Data not provided.");
          return;
     }
 
-    const inputs = formElement.querySelectorAll('input, select, textarea'); // Use formElement
+    const formInputs = formElement.querySelectorAll('input, select, textarea'); // Use formElement
 
-    inputs.forEach(input => {
-        // Ignora botões
-        if (input.type === 'submit' || input.type === 'button' || input.type === 'reset') {
+    formInputs.forEach(inputElement => {
+        // Ignore buttons
+        if (['submit', 'button', 'reset'].includes(inputElement.type)) {
             return;
         }
 
         // Pass the formElement to the identifier function
-        const identifier = getFieldInstanceIdentifier(formElement, input);
-        const originalName = input.name || input.id; // Needed for radio/checkbox group logic
+        const identifier = getFieldInstanceIdentifier(formElement, inputElement);
+        const originalName = inputElement.name || inputElement.id; // Needed for radio/checkbox group logic
+        const inputType = inputElement.type;
 
         if (identifier && data.hasOwnProperty(identifier)) {
             // Handle fields identified uniquely (most common case)
             const value = data[identifier];
 
-            if (input.type === 'checkbox') {
+            if (inputType === 'checkbox') {
                 // Simple checked state based on unique ID (if stored that way)
-                 input.checked = !!value;
+                 inputElement.checked = !!value;
                  // If data was stored per group (array of values), this needs adjustment
-                 // Example: if (data[originalName] && data[originalName].includes(input.value)) { input.checked = true; }
-            } else if (input.type === 'radio') {
+                 // Example: if (data[originalName] && data[originalName].includes(inputElement.value)) { inputElement.checked = true; }
+            } else if (inputType === 'radio') {
                  // Simple check based on unique ID (if stored that way)
-                 if (input.value === value) {
-                     input.checked = true;
+                 if (inputElement.value === value) {
+                     inputElement.checked = true;
                  }
                  // If data was stored per group:
-                 // Example: if (data[originalName] === input.value) { input.checked = true; }
-            } else if (input.type !== 'file') { // Ignora inputs tipo file
-                 if (input.multiple && input.tagName === 'SELECT') {
+                 // Example: if (data[originalName] === inputElement.value) { inputElement.checked = true; }
+            } else if (inputType !== 'file') { // Ignore file inputs
+                 if (inputElement.multiple && inputElement.tagName === 'SELECT') {
                      // Handle multi-select specifically
                      if (Array.isArray(value)) { // Ensure data is an array
                          const valuesSet = new Set(value); // Use Set for efficient lookup
-                         Array.from(input.options).forEach(option => {
+                         Array.from(inputElement.options).forEach(option => {
                              option.selected = valuesSet.has(option.value);
                          });
                      } else {
@@ -283,69 +302,81 @@ function fillFormWithJson(formElement, data) { // Added formElement parameter
                      }
                  } else {
                     // Handle single-value fields
-                    input.value = value;
+                    inputElement.value = value;
                  }
 
-                // Dispara evento de mudança para acionar validações
+                // Dispatch change event to trigger potential listeners/validations
                 const changeEvent = new Event('change', { bubbles: true });
-                input.dispatchEvent(changeEvent);
+                inputElement.dispatchEvent(changeEvent);
 
-                // Também aciona o evento input para campos que usam input listeners
+                // Also dispatch input event for fields that use input listeners
                 const inputEvent = new Event('input', { bubbles: true });
-                input.dispatchEvent(inputEvent);
+                inputElement.dispatchEvent(inputEvent);
             }
         } else if (originalName && data.hasOwnProperty(originalName)) {
              // Fallback/Alternative: Handle fields based on original name (for radio/checkbox groups stored by group name)
              const value = data[originalName];
 
-             if (input.type === 'checkbox') {
+             if (inputType === 'checkbox') {
                  // Assumes data[originalName] is an array of checked values for the group
                  if (Array.isArray(value)) {
-                     input.checked = value.includes(input.value || 'on');
+                     inputElement.checked = value.includes(inputElement.value || 'on');
                  } else {
                      // Handle case where single checkbox group was saved as boolean? (Less common)
-                     input.checked = !!value && input.value === (input.value || 'on'); // Check if the value matches this specific checkbox
+                     inputElement.checked = !!value && inputElement.value === (inputElement.value || 'on'); // Check if the value matches this specific checkbox
                  }
-             } else if (input.type === 'radio') {
+             } else if (inputType === 'radio') {
                  // Assumes data[originalName] is the single value for the selected radio in the group
-                 input.checked = (input.value === value);
+                 inputElement.checked = (inputElement.value === value);
              }
              // Potentially trigger events here too if needed for fallback cases
-        }
-    });
+            // Consider dispatching change/input events here as well if this fallback is used
+         }
+     });
 
-    // Feedback visual para o usuário
-    highlightFilledFields();
-}
+    // Provide visual feedback to the user
+    highlightFilledFields(formElement); // Pass the form element
+ }
+// Function to visually highlight filled fields within a specific form
+function highlightFilledFields(formElement) {
+    if (!formElement) return; // Don't proceed if form element is missing
 
-// Função para destacar visualmente os campos preenchidos
-function highlightFilledFields() {
-    const form = document.querySelector('form');
-    const inputs = form.querySelectorAll('input, select, textarea');
-    
-    inputs.forEach(input => {
-        // Ignora botões
-        if (input.type === 'submit' || input.type === 'button' || input.type === 'reset') {
+    const inputs = formElement.querySelectorAll('input, select, textarea');
+    const highlightColor = '#e6ffe6'; // Light green
+    const highlightDuration = 1500; // ms
+    const transitionTime = '1s';
+
+    inputs.forEach(inputElement => {
+        // Ignore buttons
+        if (['submit', 'button', 'reset'].includes(inputElement.type)) {
             return;
         }
-        
-        // Adiciona uma animação sutil para mostrar que o campo foi preenchido
-        const originalBackground = input.style.backgroundColor;
-        input.style.transition = 'background-color 1s';
-        input.style.backgroundColor = '#e6ffe6'; // Verde claro
-        
+
+        // Add a subtle animation to show the field was populated
+        const originalBackground = inputElement.style.backgroundColor;
+        inputElement.style.transition = `background-color ${transitionTime}`;
+        inputElement.style.backgroundColor = highlightColor;
+
+        // Reset background after a delay
         setTimeout(() => {
-            input.style.backgroundColor = originalBackground;
-        }, 1500);
+            // Check if the background color is still the highlight color before resetting
+            // This prevents overriding manual changes made during the highlight period
+            if (inputElement.style.backgroundColor === highlightColor) {
+                 inputElement.style.backgroundColor = originalBackground;
+            }
+            // Consider removing the transition style after completion
+            // setTimeout(() => { inputElement.style.transition = ''; }, highlightDuration + 50);
+        }, highlightDuration);
     });
 }
+
 
 // --- Botões de Interface ---
 
-// Adiciona um botão para extrair e salvar dados
+// Adds a button to extract and save form data
 function addExtractButton() {
     const button = document.createElement('button');
-    button.textContent = 'Extrair e Salvar Dados do Formulário';
+    button.textContent = 'Extract & Save Form Data';
     button.style.position = 'fixed';
     button.style.top = '10px';
     button.style.right = '10px';
@@ -356,12 +387,14 @@ function addExtractButton() {
     button.style.border = 'none';
     button.style.borderRadius = '5px';
     button.style.cursor = 'pointer';
+    button.id = 'form-transfer-save-button'; // Add an ID for easier selection/checking
     
     button.onclick = () => {
         // Find the target form (e.g., the first one on the page for now)
+        // TODO: Make form selection more robust (e.g., allow user selection, target specific ID)
         const targetForm = document.querySelector('form');
         if (!targetForm) {
-            alert("Nenhum formulário encontrado na página para extrair dados!");
+            alert("No form found on the page to extract data from!");
             return;
         }
         const data = extractFormData(targetForm); // Pass the form element
@@ -382,6 +415,13 @@ function addLoadButton() {
     button.style.top = '60px';
     button.style.right = '10px';
     button.style.zIndex = '9999';
+    button.style.padding = '10px';
+    button.style.backgroundColor = '#2196F3';
+    button.style.color = 'white';
+    button.style.border = 'none';
+    button.style.borderRadius = '5px';
+    button.style.cursor = 'pointer';
+    button.id = 'form-transfer-load-button'; // Add an ID
     button.style.padding = '10px';
     button.style.backgroundColor = '#2196F3';
     button.style.color = 'white';
@@ -415,42 +455,50 @@ function addLoadButton() {
     return button;
 }
 
-// --- Script principal ---
+// --- Main Script Logic ---
 
 // Adiciona os botões quando a página carrega
+// Initializes the script by adding the UI buttons.
 function init() {
-    // Verifica se os botões já existem para evitar duplicações
-    if (!document.querySelector('#form-extractor-save') && 
-        !document.querySelector('#form-extractor-load')) {
-        
-        const saveButton = addExtractButton();
-        saveButton.id = 'form-extractor-save';
-        
-        const loadButton = addLoadButton();
-        loadButton.id = 'form-extractor-load';
-        
-        console.log("Extrator de formulário inicializado!");
+    // Check if buttons already exist to prevent duplication if script runs multiple times.
+    const saveButtonExists = document.getElementById('form-transfer-save-button');
+    const loadButtonExists = document.getElementById('form-transfer-load-button');
+
+    if (!saveButtonExists) {
+        addExtractButton(); // ID is now set within this function
+    }
+    if (!loadButtonExists) {
+        addLoadButton(); // ID is now set within this function
+    }
+
+    if (!saveButtonExists || !loadButtonExists) {
+        console.log("Form Transfer script initialized and buttons added/verified.");
+    } else {
+        console.log("Form Transfer buttons already exist.");
     }
 }
 
 // Executa a inicialização quando o DOM estiver completamente carregado
+// Execute initialization when the DOM is ready.
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {
+    // DOM is already loaded
     init();
 }
 
 // --- Versão como Bookmarklet ---
-// Para usar como bookmarklet, crie um novo favorito e cole o código abaixo na URL:
+// --- Bookmarklet Version Notes ---
+// To use as a bookmarklet, create a new bookmark and paste the minified code
+// prefixed with 'javascript:' into the URL/Location field.
 /*
 javascript:(function(){
     const script = document.createElement('script');
     script.src = 'data:text/javascript;charset=utf-8,' + encodeURIComponent(`
-        // Cole aqui o código acima, removendo comentários e condensando
+        // Paste the entire script content here, ideally minified.
     `);
     document.body.appendChild(script);
 })();
 */
-
-// Inicia o script automaticamente
-init();
+// The script now initializes itself based on DOMContentLoaded or immediately if already loaded.
+// The explicit init() call at the end is removed to avoid potential double initialization.
