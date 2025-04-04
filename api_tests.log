@@ -1,0 +1,54 @@
+2025-04-04 17:13:44,643 - INFO - 
+==================================================
+Starting test: test_successful_request
+==================================================
+2025-04-04 17:13:44,643 - INFO - Test Data:
+{
+  "history": "Paciente masculino, 45 anos, com dor abdominal há 3 dias. PA: 120/80 mmHg, FC: 80 bpm. Sem alergias conhecidas."
+}
+2025-04-04 17:13:44,651 - INFO - Request URL: http://localhost:5000/api/process-clinical-history
+2025-04-04 17:13:44,652 - INFO - Status Code: 403
+2025-04-04 17:13:44,652 - INFO - Response Text: 
+2025-04-04 17:13:44,652 - INFO - 
+==================================================
+Completed test: test_successful_request
+==================================================
+
+2025-04-04 17:16:06,934 - INFO - 
+==================================================
+Starting test: test_api_key_validation
+==================================================
+2025-04-04 17:16:06,943 - INFO - Request URL: http://localhost:5000/api/process-clinical-history
+2025-04-04 17:16:06,943 - INFO - Status Code: 403
+2025-04-04 17:16:06,943 - INFO - Response Text: 
+2025-04-04 17:16:06,943 - ERROR - 403 Forbidden - Likely API key issue
+2025-04-04 17:16:06,943 - INFO - 
+==================================================
+Starting test: test_successful_request
+==================================================
+2025-04-04 17:16:06,943 - INFO - Test Data:
+{
+  "history": "Paciente masculino, 45 anos, com dor abdominal há 3 dias."
+}
+2025-04-04 17:16:06,949 - INFO - Request URL: http://localhost:5000/api/process-clinical-history
+2025-04-04 17:16:06,950 - INFO - Status Code: 403
+2025-04-04 17:16:06,950 - INFO - Response Text: 
+2025-04-04 17:16:29,418 - INFO - 
+==================================================
+Starting test: test_api_key_validation
+==================================================
+2025-04-04 17:16:29,429 - INFO - Request URL: http://localhost:5000/api/process-clinical-history
+2025-04-04 17:16:29,429 - INFO - Status Code: 403
+2025-04-04 17:16:29,429 - INFO - Response Text: 
+2025-04-04 17:16:29,429 - ERROR - 403 Forbidden - Likely API key issue
+2025-04-04 17:16:29,430 - INFO - 
+==================================================
+Starting test: test_successful_request
+==================================================
+2025-04-04 17:16:29,430 - INFO - Test Data:
+{
+  "history": "Paciente masculino, 45 anos, com dor abdominal há 3 dias."
+}
+2025-04-04 17:16:29,431 - INFO - Request URL: http://localhost:5000/api/process-clinical-history
+2025-04-04 17:16:29,431 - INFO - Status Code: 403
+2025-04-04 17:16:29,432 - INFO - Response Text: 
